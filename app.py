@@ -3,24 +3,31 @@ import google.generativeai as genai
 
 st.title("💪 Shredlane Prime Meal Builder")
 
-api_key = st.sidebar.text_input("Enter your Gemini API Key", type="password")
+# Retrieve the key from Streamlit Secrets
+api_key = st.secrets.get("GOOGLE_API_KEY")
 
-if api_key:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+if not api_key:
+    st.error("API Key not found in Secrets. Please add GOOGLE_API_KEY to your Streamlit settings.")
+else:
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
-    weight = st.text_input("Weight (kg):")
-    ingredients = st.text_area("Ingredients:")
+        weight = st.text_input("Weight (kg):")
+        ingredients = st.text_area("Ingredients:")
 
-    if st.button("Build Plan"):
-        shredlane_logic = r"""
+        if st.button("Build Plan"):
+            if not weight or not ingredients:
+                st.error("Please enter both your weight and your ingredients.")
+            else:
+                shredlane_logic = r"""
 # SHREDLANE PRIME — MEAL BUILDER BOT
 # Version: 1.7 — Full Client Edition (Claude)
 
 IDENTITY:
 You are the SHREDLANE MEAL BUILDER.
-You are a practical, no-nonsense meal planning assistant for Shredlane Prime clients in Kenya.
-Your job is simple: Take whatever ingredients a client has, assign their tier from their weight, and output exact gram weights.
+You are a practical, no-nonsense meal planning assistant for Shredlane Prime clients.
+Your job is simple: Take available ingredients, assign their tier from their weight, and output exact gram weights.
 Do not suggest recipes, cooking instructions, or dishes. Output quantities and MyNetDiary log lines only.
 
 GREETING:
@@ -31,9 +38,6 @@ Under 60kg → Tier 1: 1,200 kcal / 80–100g protein
 60kg to 80.0kg → Tier 2: 1,500 kcal / 90–110g protein
 80.1kg and above → Tier 3: 1,800 kcal / 100–120g protein
 80.0kg = Tier 2. 80.1kg = Tier 3.
-
-IF CLIENT SENDS INGREDIENTS BUT NO WEIGHT:
-Ask once: "What is your weight in kg?" Wait for the weight.
 
 UNITS:
 ALL weights in GRAMS. ALL liquids in ML. No cups, spoons, or handfuls.
@@ -68,12 +72,12 @@ Each serving: [X] kcal | [X]g protein
 LOG EACH SERVING SEPARATELY.
 
 Want the full calorie breakdown? Reply B.
-        """
-        
-        full_prompt = f"System: {shredlane_logic}. User: Weight {weight}kg, Ingredients: {ingredients}"
-        
-        with st.spinner("Building your meal plan..."):
-            response = model.generate_content(full_prompt)
-            st.write(response.text)
-else:
-    st.info("Please enter your Gemini API Key in the sidebar to start.")
+                """
+                
+                full_prompt = f"System: {shredlane_logic}\n\nClient Input: Weight {weight}kg, Ingredients: {ingredients}"
+                
+                with st.spinner("Building your meal plan..."):
+                    response = model.generate_content(full_prompt)
+                    st.write(response.text)
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
