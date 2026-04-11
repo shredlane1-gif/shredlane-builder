@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-import time  # NEW: Added for handling retries
+import time
 
 st.title("💪 Shredlane Prime Meal Builder")
 
@@ -58,18 +58,29 @@ FORMATTING RULES:
                 full_prompt = f"System: {shredlane_logic}\n\nClient Input: Gender: {gender}, Weight: {weight}kg, Ingredients: {ingredients}"
                 
                 with st.spinner("Building your meal plan..."):
-                    # NEW: Retry Logic for 429 Errors
                     max_retries = 3
                     retry_delay = 2 
+                    success = False
+                    
                     for attempt in range(max_retries):
                         try:
                             response = model.generate_content(full_prompt)
                             st.write(response.text)
+                            success = True
                             break 
                         except Exception as e:
-                            if "429" in str(e) and attempt < max_retries - 1:
-                                time.sleep(retry_delay)
-                                retry_delay *= 2 
+                            # Handle Quota/Rate Limits
+                            if "429" in str(e):
+                                if "quota" in str(e).lower():
+                                    st.error("⚠️ Daily Limit Reached")
+                                    st.write("We've hit our daily capacity for meal plan generations. Please check back tomorrow morning to get your updated plan.")
+                                    break
+                                elif attempt < max_retries - 1:
+                                    time.sleep(retry_delay)
+                                    retry_delay *= 2 
+                                else:
+                                    st.error("The system is currently busy. Please try again in a few minutes.")
+                                    break
                             else:
                                 st.error(f"An error occurred: {e}")
                                 break
