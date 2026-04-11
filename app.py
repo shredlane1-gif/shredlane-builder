@@ -12,10 +12,9 @@ else:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-3-flash-preview")
 
-        # Added Gender selection for accurate calorie targeting
         gender = st.selectbox("Select Gender:", ["Female", "Male"])
         weight = st.text_input("Weight (kg):")
-        ingredients = st.text_area("Ingredients:")
+        ingredients = st.text_area("Ingredients (List everything available):")
 
         if st.button("Build Plan"):
             if not weight or not ingredients:
@@ -23,29 +22,32 @@ else:
             else:
                 shredlane_logic = r"""
 IDENTITY:
-You are the SHREDLANE MEAL BUILDER.
-Output quantities and MyNetDiary log lines only. Do not suggest recipes, dishes, or cooking instructions.
+You are the SHREDLANE MEAL BUILDER. 
+Your ONLY job is to organize the ingredients provided by the client into a meal plan.
 
-CALORIE & TIER RULES:
-1. IF FEMALE: Total daily calories MUST NOT exceed 1,500 kcal, regardless of weight.
-2. IF WEIGHT < 80kg: Total daily calories MUST be 1,200 kcal.
-3. IF WEIGHT >= 80kg AND MALE: Total daily calories 1,800 kcal.
+STRICT RULES:
+1. USE ONLY PROVIDED INGREDIENTS. Do not suggest whey, protein powder, or anything not in the input list.
+2. If the user input is incomplete, do not hallucinate items. Work only with what is provided.
+3. Output MUST be strictly formatted into three sections: MEAL 1, MEAL 2, and BIG MEAL.
+4. Each section MUST list the ingredient, the weight in grams, and the MyNetDiary log line.
 
-STRUCTURE REQUIREMENTS:
-You MUST output exactly these three sections:
-1. MEAL 1 (Small)
-2. MEAL 2 (Small)
-3. BIG MEAL (Cook once, eat twice)
+CALORIE TARGETS:
+- IF FEMALE: Max 1,500 kcal/day.
+- IF WEIGHT < 80kg: Target 1,200 kcal/day.
+- IF WEIGHT >= 80kg AND MALE: Target 1,800 kcal/day.
 
-UNITS:
-ALL weights in GRAMS. ALL liquids in ML. No cups, spoons, or handfuls.
+FORMAT:
+MEAL 1
+- [Ingredient]: [X]g
+- MyNetDiary Log: [Search Term] - [X]g
 
-CRITICAL LOGIC:
-1. Log every ingredient with a MyNetDiary search term.
-2. Soy Chunks = PROTEIN source (log dry weight).
-3. Legumes/Quinoa/Amaranth = CARB source (need separate protein).
-4. Round all weights to nearest 5g.
-5. Provide specific MyNetDiary log lines for every item.
+MEAL 2
+- [Ingredient]: [X]g
+- MyNetDiary Log: [Search Term] - [X]g
+
+BIG MEAL (Cook once, eat twice)
+- [Ingredient]: [X]g total
+- MyNetDiary Log: [Search Term] - [X]g per serving
                 """
                 
                 full_prompt = f"System: {shredlane_logic}\n\nClient Input: Gender: {gender}, Weight: {weight}kg, Ingredients: {ingredients}"
