@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import time  # NEW: Added for handling retries
 
 st.title("💪 Shredlane Prime Meal Builder")
 
@@ -31,8 +32,12 @@ CALORIE & MACRO TARGETS:
 - IF WEIGHT >= 80kg AND MALE: Total daily target 1,800 kcal.
 - FAT CONSTRAINT: Total daily fat calories MUST be between 20% and 30% of total calories.
 
-REQUIRED OUTPUT STRUCTURE:
+UGALI LOGGING CONSTRAINT:
+- ALWAYS use 'Cooked Ugali' as the ingredient. NEVER use 'Raw Flour'.
+- REFERENCE DENSITY: Treat 'Cooked Ugali' as ~125 kcal per 100g.
+- The AI must calculate the weight of 'Cooked Ugali' needed based on this reference density to meet calorie targets.
 
+REQUIRED OUTPUT STRUCTURE:
 OPTION 1: TWO MEALS (Daily target split 50/50)
 - MEAL 1: List ingredients/grams. Provide MyNetDiary log line per ingredient.
 - MEAL 2: List ingredients/grams. Provide MyNetDiary log line per ingredient.
@@ -53,7 +58,20 @@ FORMATTING RULES:
                 full_prompt = f"System: {shredlane_logic}\n\nClient Input: Gender: {gender}, Weight: {weight}kg, Ingredients: {ingredients}"
                 
                 with st.spinner("Building your meal plan..."):
-                    response = model.generate_content(full_prompt)
-                    st.write(response.text)
+                    # NEW: Retry Logic for 429 Errors
+                    max_retries = 3
+                    retry_delay = 2 
+                    for attempt in range(max_retries):
+                        try:
+                            response = model.generate_content(full_prompt)
+                            st.write(response.text)
+                            break 
+                        except Exception as e:
+                            if "429" in str(e) and attempt < max_retries - 1:
+                                time.sleep(retry_delay)
+                                retry_delay *= 2 
+                            else:
+                                st.error(f"An error occurred: {e}")
+                                break
     except Exception as e:
         st.error(f"An error occurred: {e}")
