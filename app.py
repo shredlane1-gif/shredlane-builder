@@ -3,7 +3,6 @@ import google.generativeai as genai
 
 st.title("💪 Shredlane Prime Meal Builder")
 
-# Retrieve the key from Streamlit Secrets
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
@@ -11,9 +10,10 @@ if not api_key:
 else:
     try:
         genai.configure(api_key=api_key)
-        # Using the latest supported model
         model = genai.GenerativeModel("gemini-3-flash-preview")
 
+        # Added Gender selection for accurate calorie targeting
+        gender = st.selectbox("Select Gender:", ["Female", "Male"])
         weight = st.text_input("Weight (kg):")
         ingredients = st.text_area("Ingredients:")
 
@@ -24,13 +24,12 @@ else:
                 shredlane_logic = r"""
 IDENTITY:
 You are the SHREDLANE MEAL BUILDER.
-Your job is to assign a tier based on weight and output exact gram weights for ingredients.
 Output quantities and MyNetDiary log lines only. Do not suggest recipes, dishes, or cooking instructions.
 
-TIER ASSIGNMENT:
-Under 60kg → Tier 1: 1,200 kcal / 80–100g protein
-60kg to 80.0kg → Tier 2: 1,500 kcal / 90–110g protein
-80.1kg and above → Tier 3: 1,800 kcal / 100–120g protein
+CALORIE & TIER RULES:
+1. IF FEMALE: Total daily calories MUST NOT exceed 1,500 kcal, regardless of weight.
+2. IF WEIGHT < 80kg: Total daily calories MUST be 1,200 kcal.
+3. IF WEIGHT >= 80kg AND MALE: Total daily calories 1,800 kcal.
 
 STRUCTURE REQUIREMENTS:
 You MUST output exactly these three sections:
@@ -45,12 +44,11 @@ CRITICAL LOGIC:
 1. Log every ingredient with a MyNetDiary search term.
 2. Soy Chunks = PROTEIN source (log dry weight).
 3. Legumes/Quinoa/Amaranth = CARB source (need separate protein).
-4. Oil = separate line, 15g for restaurant meals.
-5. Round all weights to nearest 5g.
-6. Provide specific MyNetDiary log lines for every item.
+4. Round all weights to nearest 5g.
+5. Provide specific MyNetDiary log lines for every item.
                 """
                 
-                full_prompt = f"System: {shredlane_logic}\n\nClient Input: Weight {weight}kg, Ingredients: {ingredients}"
+                full_prompt = f"System: {shredlane_logic}\n\nClient Input: Gender: {gender}, Weight: {weight}kg, Ingredients: {ingredients}"
                 
                 with st.spinner("Building your meal plan..."):
                     response = model.generate_content(full_prompt)
