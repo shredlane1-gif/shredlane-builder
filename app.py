@@ -1,88 +1,74 @@
 import streamlit as st
 import google.generativeai as genai
-import time
 
-st.title("💪 Shredlane Prime Meal Builder")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="Shredlane Prime", layout="wide")
+st.title("💪 Shredlane Prime Master Control")
 
+# Retrieve API Key from Streamlit Secrets
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
-    st.error("API Key not found in Secrets. Please add GOOGLE_API_KEY to your Streamlit settings.")
+    st.error("API Key not found. Please set GOOGLE_API_KEY in your Streamlit secrets.")
 else:
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-3-flash-preview")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-3-flash-preview")
 
+    # --- 2. MASTER SWITCH (The Radio Button) ---
+    mode = st.radio("Select Mode:", ["Meal Builder", "Audit Engine"])
+
+    # --- 3. MODE 1: MEAL BUILDER ---
+    if mode == "Meal Builder":
+        st.subheader("🛠 Meal Builder")
         gender = st.selectbox("Select Gender:", ["Female", "Male"])
         weight = st.text_input("Weight (kg):")
-        ingredients = st.text_area("Ingredients (List everything available):")
+        ingredients = st.text_area("Ingredients:")
 
         if st.button("Build Plan"):
-            if not weight or not ingredients:
-                st.error("Please enter both your weight and your ingredients.")
-            else:
-                shredlane_logic = r"""
-IDENTITY:
-You are the SHREDLANE MEAL BUILDER.
-You are strictly forbidden from adding ingredients NOT in the provided list.
+            # PASTE YOUR EXISTING MEAL BUILDER LOGIC BELOW
+            shredlane_logic = r"""
+            [PASTE YOUR PREVIOUS MEAL BUILDER PROMPT HERE]
+            """
+            full_prompt = f"System: {shredlane_logic}\n\nInput: Gender: {gender}, Weight: {weight}kg, Ingredients: {ingredients}"
+            
+            with st.spinner("Building your plan..."):
+                response = model.generate_content(full_prompt)
+                st.write(response.text)
 
-CALORIE & MACRO TARGETS:
-- IF FEMALE: Total daily target 1,500 kcal.
-- IF WEIGHT < 80kg: Total daily target 1,200 kcal.
-- IF WEIGHT >= 80kg AND MALE: Total daily target 1,800 kcal.
-- FAT CONSTRAINT: Total daily fat calories MUST be between 20% and 30% of total calories.
+    # --- 4. MODE 2: AUDIT ENGINE ---
+    elif mode == "Audit Engine":
+        st.subheader("📋 Shredlane Audit Engine")
+        
+        # Simple security for your Audit Engine
+        password = st.text_input("Master Password:", type="password")
+        if password != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
+            st.warning("Password required to access coaching tools.")
+            st.stop()
 
-UGALI LOGGING CONSTRAINT:
-- ALWAYS use 'Cooked Ugali' as the ingredient. NEVER use 'Raw Flour'.
-- REFERENCE DENSITY: Treat 'Cooked Ugali' as ~125 kcal per 100g.
-- The AI must calculate the weight of 'Cooked Ugali' needed based on this reference density to meet calorie targets.
+        with st.form("audit_form"):
+            client_name = st.text_input("Client Name")
+            targets = st.text_input("Daily Targets (e.g., 1200 kcal / 90g Pro)")
+            whatsapp_data = st.text_area("WhatsApp Check-in (Steps, Weight, Sleep, Water)")
+            diary_log = st.text_area("MyNetDiary Log")
+            submit_audit = st.form_submit_button("Generate Feedback")
 
-REQUIRED OUTPUT STRUCTURE:
-OPTION 1: TWO MEALS (Daily target split 50/50)
-- MEAL 1: List ingredients/grams. Provide MyNetDiary log line per ingredient.
-- MEAL 2: List ingredients/grams. Provide MyNetDiary log line per ingredient.
-
-OPTION 2: BIG MEAL (Batch Cook)
-- This is ONE recipe containing 100% of the daily calories and protein.
-- Provide TOTAL batch weights.
-- Provide the log line "per serving" (divide by 2).
-
-FORMATTING RULES:
-- Weights in GRAMS only. 
-- Use the provided ingredient list ONLY.
-- Log lines: Name - Weight - MyNetDiary Term.
-- Round all weights to nearest 5g.
-- No recipes, no dishes, no extra advice. Output plans only.
-                """
-                
-                full_prompt = f"System: {shredlane_logic}\n\nClient Input: Gender: {gender}, Weight: {weight}kg, Ingredients: {ingredients}"
-                
-                with st.spinner("Building your meal plan..."):
-                    max_retries = 3
-                    retry_delay = 2 
-                    success = False
-                    
-                    for attempt in range(max_retries):
-                        try:
-                            response = model.generate_content(full_prompt)
-                            st.write(response.text)
-                            success = True
-                            break 
-                        except Exception as e:
-                            # Handle Quota/Rate Limits
-                            if "429" in str(e):
-                                if "quota" in str(e).lower():
-                                    st.error("⚠️ Daily Limit Reached")
-                                    st.write("We've hit our daily capacity for meal plan generations. Please check back tomorrow morning to get your updated plan.")
-                                    break
-                                elif attempt < max_retries - 1:
-                                    time.sleep(retry_delay)
-                                    retry_delay *= 2 
-                                else:
-                                    st.error("The system is currently busy. Please try again in a few minutes.")
-                                    break
-                            else:
-                                st.error(f"An error occurred: {e}")
-                                break
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+        if submit_audit:
+            doctrine_prompt = f"""
+            YOU ARE THE SHREDLANE COACH. FOLLOW THE SHREDLANE DOCTRINE:
+            1. NO DASHES (-) OR (—) ALLOWED.
+            2. TONE: Concise, direct, diplomatic, WhatsApp-friendly.
+            3. STRUCTURE: Status Header (✅/⚠️/❌), Key Metrics, Trend Tracking, Tomorrow Action Plan, Notes.
+            4. NON-NEGOTIABLES: Reject generic 'Chicken/Stew'. Enforce precision.
+            
+            INPUTS:
+            Client: {client_name}
+            Targets: {targets}
+            WhatsApp Data: {whatsapp_data}
+            MyNetDiary Log: {diary_log}
+            """
+            with st.spinner("Analyzing data..."):
+                response = model.generate_content(doctrine_prompt)
+                # Ensure no dashes exist in final output
+                feedback = response.text.replace("-", "").replace("—", "")
+                st.write(feedback)
+                st.code(feedback, language="markdown")
