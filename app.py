@@ -5,7 +5,7 @@ import google.generativeai as genai
 st.set_page_config(page_title="Shredlane Prime", layout="wide")
 st.title("💪 Shredlane Prime Master Control")
 
-# Retrieve API Key from Streamlit Secrets
+# Retrieve API Key
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
@@ -14,7 +14,7 @@ else:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-3-flash-preview")
 
-    # --- 2. MASTER SWITCH (The Radio Button) ---
+    # --- 2. MASTER SWITCH ---
     mode = st.radio("Select Mode:", ["Meal Builder", "Audit Engine"])
 
     # --- 3. MODE 1: MEAL BUILDER ---
@@ -25,7 +25,6 @@ else:
         ingredients = st.text_area("Ingredients:")
 
         if st.button("Build Plan"):
-            # PASTE YOUR EXISTING MEAL BUILDER LOGIC BELOW
             shredlane_logic = r"""
             [PASTE YOUR PREVIOUS MEAL BUILDER PROMPT HERE]
             """
@@ -39,10 +38,10 @@ else:
     elif mode == "Audit Engine":
         st.subheader("📋 Shredlane Audit Engine")
         
-        # Simple security for your Audit Engine
+        # Security
         password = st.text_input("Master Password:", type="password")
         if password != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
-            st.warning("Password required to access coaching tools.")
+            st.warning("Password required.")
             st.stop()
 
         with st.form("audit_form"):
@@ -53,22 +52,50 @@ else:
             submit_audit = st.form_submit_button("Generate Feedback")
 
         if submit_audit:
+            # THIS IS THE FINAL CLEAN PROMPT
             doctrine_prompt = f"""
-            YOU ARE THE SHREDLANE COACH. FOLLOW THE SHREDLANE DOCTRINE:
-            1. NO DASHES (-) OR (—) ALLOWED.
-            2. TONE: Concise, direct, diplomatic, WhatsApp-friendly.
-            3. STRUCTURE: Status Header (✅/⚠️/❌), Key Metrics, Trend Tracking, Tomorrow Action Plan, Notes.
-            4. NON-NEGOTIABLES: Reject generic 'Chicken/Stew'. Enforce precision.
+            You are the Shredlane Coach. Your job is to give daily feedback to a client.
             
+            FOLLOW THESE RULES:
+            1. Write in very simple, easy-to-understand English (Grade 7 level).
+            2. Do NOT use dashes (-) or (—) anywhere in your output. Use numbers or plain text.
+            3. Write only ONE response. Do not repeat yourself.
+            4. Structure the message exactly like this:
+               
+               STATUS: (Use ✅ for Good, ⚠️ for Warning, ❌ for Bad)
+               
+               NUMBERS:
+               Calories: [X] kcal
+               Protein: [X]g
+               Steps: [X]
+               Sleep: [X]
+               
+               YOUR PROGRESS:
+               [Briefly mention weight and waist trend]
+               
+               TOMORROW'S PLAN:
+               1. [Instruction 1]
+               2. [Instruction 2]
+               3. [Instruction 3]
+               
+               COACH'S NOTE:
+               [Write 2 to 3 simple sentences about their performance. Be kind but tell them how to improve.]
+
+            THE RULES:
+            - Always tell them to weigh food before cooking.
+            - Always be specific about food (e.g., say 'chicken breast' not just 'chicken').
+            - If steps are low, tell them to walk more.
+
             INPUTS:
             Client: {client_name}
             Targets: {targets}
             WhatsApp Data: {whatsapp_data}
             MyNetDiary Log: {diary_log}
             """
+            
             with st.spinner("Analyzing data..."):
                 response = model.generate_content(doctrine_prompt)
-                # Ensure no dashes exist in final output
-                feedback = response.text.replace("-", "").replace("—", "")
-                st.write(feedback)
-                st.code(feedback, language="markdown")
+                # Final cleanup
+                final_feedback = response.text.replace("-", "").replace("—", "")
+                st.write(final_feedback)
+                st.code(final_feedback, language="markdown")
