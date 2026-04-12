@@ -36,7 +36,7 @@ else:
             1. EGGS: Always use 'whole units' (e.g., 2 eggs). NEVER use grams for eggs.
             2. NO FLOUR: Do not list 'Maize Flour' or 'Ugali Flour'. Use 'Cooked Ugali' measured in grams.
             3. MEATS/SIDES: Use grams (cooked weight for ugali, raw weight for proteins).
-            4. FATS: Use grams or teaspoons for Ghee/Oil.
+            4. FATS (Ghee, Oil, Butter): MUST be measured strictly in GRAMS. NEVER use mls or teaspoons.
             
             REQUIRED OUTPUT FORMAT:
             You must provide exactly two options:
@@ -52,7 +52,7 @@ else:
             """
             full_prompt = f"System: {shredlane_logic}\n\nInput: Gender: {gender}, Weight: {weight}kg, Ingredients: {ingredients}"
             
-            with st.spinner("Calculating macros and building options..."):
+            with st.spinner("Calculating macros (20-30% Fat) and building options..."):
                 response = model.generate_content(full_prompt)
                 st.write(response.text)
 
@@ -63,7 +63,7 @@ else:
         # Security
         password = st.text_input("Master Password:", type="password")
         if password != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
-            st.warning("Password required to access coaching tools.")
+            st.warning("Password required.")
             st.stop()
 
         with st.form("audit_form"):
@@ -85,9 +85,10 @@ else:
             
             STRICT DATA RULES:
             1. PROTEIN: Sum the values from the MyNetDiary log using the table above.
-            2. VERIFICATION: If info is missing, write 'Not reported'. Do not guess.
-            3. FORMATTING: Do NOT use any dashes (-) or (—). 
-            4. STRUCTURE: Status (✅/⚠️/❌), Numbers, Your Progress, Tomorrow's Plan, Coach's Note.
+            2. FAT TRACKING: Check that all fats (Ghee, Oil) are tracked in GRAMS. If they used mls or spoons, give a warning in the Coach's Note.
+            3. VERIFICATION: If info is missing, write 'Not reported'. Do not guess.
+            4. FORMATTING: Do NOT use any dashes (-) or (—). 
+            5. STRUCTURE: Status (✅/⚠️/❌), Numbers, Your Progress, Tomorrow's Plan, Coach's Note.
             
             INPUTS:
             Client: {client_name}
@@ -96,7 +97,7 @@ else:
             MyNetDiary Log: {diary_log}
             """
             
-            with st.spinner("Analyzing data and calculating protein..."):
+            with st.spinner("Analyzing data and verifying fat measurements..."):
                 response = model.generate_content(doctrine_prompt)
                 # Final cleanup: Strip all dashes
                 final_feedback = response.text.replace("-", "").replace("—", "")
