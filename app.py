@@ -52,23 +52,34 @@ else:
             submit_audit = st.form_submit_button("Generate Feedback")
 
         if submit_audit:
-            # THIS IS THE FINAL DATA-RELIABLE PROMPT
+            # THIS IS THE FINAL DATA-RELIABLE PROMPT WITH PROTEIN CALCULATION
             doctrine_prompt = f"""
             You are the Shredlane Data Auditor. Your task is to provide daily coaching feedback based ONLY on provided data.
             
             STRICT DATA RULES:
-            1. VERIFICATION: Calculate totals only from the 'MyNetDiary Log' provided. Do not guess. If the log is incomplete, report it as 'Log data incomplete'.
-            2. NO HALLUCINATION: If a metric (Sleep, Water) is missing from the check-in, do not invent one. Report it as 'Not reported'.
+            1. PROTEIN CALCULATION: Use this reference table for the MyNetDiary Log to calculate total protein:
+               - Chicken Breast (100g) = 23g protein
+               - Eggs (1 large) = 6g protein
+               - Greek Yogurt (100g) = 10g protein
+               - Beef/Goat (100g) = 20g protein
+               - Beans/Lentils (100g) = 9g protein
+               - If an item is missing from this list, estimate based on standard data.
+               Sum these values for the total. If the log entry is just 'Chicken', assume 100g.
+            
+            2. VERIFICATION: Calculate totals only from the 'MyNetDiary Log' provided. Do not guess. If the log is completely unreadable, report it as 'Log data incomplete'.
+            
             3. GRADE 7 LEVEL: Write in simple, easy English. No complex business jargon.
+            
             4. FORMATTING: Do NOT use any dashes (-) or (—) in your output. Use numbers or plain text.
+            
             5. STRUCTURE:
                STATUS: (Use ✅ for Good, ⚠️ for Warning, ❌ for Bad)
                
                NUMBERS:
-               Calories: [X] kcal
-               Protein: [X]g
-               Steps: [X]
-               Sleep: [X]
+               Calories: [Total kcal from log]
+               Protein: [Calculated Total]g
+               Steps: [From check-in]
+               Sleep: [From check-in]
                
                YOUR PROGRESS:
                [Briefly mention weight and waist trend based on check-in]
@@ -83,7 +94,6 @@ else:
 
             THE RULES TO ENFORCE:
             - Always require weighing food before cooking.
-            - Reject generic entries like 'Chicken' or 'Stew'. Force specific names (e.g., 'Chicken Breast').
             - If steps are below 7,000, explicitly tell them to walk more.
 
             INPUTS:
@@ -93,7 +103,7 @@ else:
             MyNetDiary Log: {diary_log}
             """
             
-            with st.spinner("Analyzing data..."):
+            with st.spinner("Analyzing data and calculating protein..."):
                 response = model.generate_content(doctrine_prompt)
                 
                 # FINAL CLEANUP: Strip all dashes
