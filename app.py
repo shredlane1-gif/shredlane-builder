@@ -41,7 +41,7 @@ else:
         # Security
         password = st.text_input("Master Password:", type="password")
         if password != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
-            st.warning("Password required.")
+            st.warning("Password required to access coaching tools.")
             st.stop()
 
         with st.form("audit_form"):
@@ -52,16 +52,16 @@ else:
             submit_audit = st.form_submit_button("Generate Feedback")
 
         if submit_audit:
-            # THIS IS THE FINAL CLEAN PROMPT
+            # THIS IS THE FINAL DATA-RELIABLE PROMPT
             doctrine_prompt = f"""
-            You are the Shredlane Coach. Your job is to give daily feedback to a client.
+            You are the Shredlane Data Auditor. Your task is to provide daily coaching feedback based ONLY on provided data.
             
-            FOLLOW THESE RULES:
-            1. Write in very simple, easy-to-understand English (Grade 7 level).
-            2. Do NOT use dashes (-) or (—) anywhere in your output. Use numbers or plain text.
-            3. Write only ONE response. Do not repeat yourself.
-            4. Structure the message exactly like this:
-               
+            STRICT DATA RULES:
+            1. VERIFICATION: Calculate totals only from the 'MyNetDiary Log' provided. Do not guess. If the log is incomplete, report it as 'Log data incomplete'.
+            2. NO HALLUCINATION: If a metric (Sleep, Water) is missing from the check-in, do not invent one. Report it as 'Not reported'.
+            3. GRADE 7 LEVEL: Write in simple, easy English. No complex business jargon.
+            4. FORMATTING: Do NOT use any dashes (-) or (—) in your output. Use numbers or plain text.
+            5. STRUCTURE:
                STATUS: (Use ✅ for Good, ⚠️ for Warning, ❌ for Bad)
                
                NUMBERS:
@@ -71,7 +71,7 @@ else:
                Sleep: [X]
                
                YOUR PROGRESS:
-               [Briefly mention weight and waist trend]
+               [Briefly mention weight and waist trend based on check-in]
                
                TOMORROW'S PLAN:
                1. [Instruction 1]
@@ -79,12 +79,12 @@ else:
                3. [Instruction 3]
                
                COACH'S NOTE:
-               [Write 2 to 3 simple sentences about their performance. Be kind but tell them how to improve.]
+               [2 to 3 simple sentences. Be kind, firm, and focus on the rules.]
 
-            THE RULES:
-            - Always tell them to weigh food before cooking.
-            - Always be specific about food (e.g., say 'chicken breast' not just 'chicken').
-            - If steps are low, tell them to walk more.
+            THE RULES TO ENFORCE:
+            - Always require weighing food before cooking.
+            - Reject generic entries like 'Chicken' or 'Stew'. Force specific names (e.g., 'Chicken Breast').
+            - If steps are below 7,000, explicitly tell them to walk more.
 
             INPUTS:
             Client: {client_name}
@@ -95,7 +95,9 @@ else:
             
             with st.spinner("Analyzing data..."):
                 response = model.generate_content(doctrine_prompt)
-                # Final cleanup
+                
+                # FINAL CLEANUP: Strip all dashes
                 final_feedback = response.text.replace("-", "").replace("—", "")
+                
                 st.write(final_feedback)
                 st.code(final_feedback, language="markdown")
