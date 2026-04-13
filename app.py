@@ -1,40 +1,34 @@
 import streamlit as st
 from google import genai
-from google.genai import types
 import gspread
 from google.oauth2.service_account import Credentials
 import re
 from datetime import datetime
 
 # --- 1. SETUP ---
-st.set_page_config(page_title="Shredlane Prime", layout="wide")
-st.title("⚡ Shredlane Prime: 2026 Automation")
+st.set_page_config(page_title="Shredlane Prime Hub", layout="wide")
+st.title("⚡ Shredlane Prime: Automation Hub")
 
 api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
 sheet_id = st.secrets.get("SPREADSHEET_ID")
 google_creds = st.secrets.get("gcp_service_account")
 
-# Initialize Client
+# Initialize Client & Model Discovery
 client = None
-active_model = "gemini-3-flash" # Default target
+active_model = "gemini-3-flash" # Targeted model
 
 if api_key:
     try:
-        # 2026 SDK uses the Client object
         client = genai.Client(api_key=api_key)
-        
-        # SIDEBAR DIAGNOSTICS: See what you actually own
-        with st.sidebar.expander("📡 API Model Discovery"):
+        # Sidebar Diagnostic: Check which models are actually available to this key
+        with st.sidebar.expander("📡 Model Discovery"):
             available_models = [m.name for m in client.models.list()]
             st.write(available_models)
-            
-            # Auto-select best available
-            if "models/gemini-3-flash" in available_models:
-                active_model = "gemini-3-flash"
-            elif "models/gemini-2.5-flash" in available_models:
-                active_model = "gemini-2.5-flash"
+            # Auto-fallback logic
+            if "models/gemini-3-flash" not in available_models:
+                active_model = "gemini-2.5-flash" if "models/gemini-2.5-flash" in available_models else "gemini-1.5-flash"
         
-        st.sidebar.success(f"✅ Online: {active_model}")
+        st.sidebar.success(f"✅ AI Online: {active_model}")
     except Exception as e:
         st.sidebar.error(f"Connection Failed: {e}")
 
@@ -43,11 +37,11 @@ mode = st.sidebar.radio("Navigation", ["Audit Engine", "Meal Builder"])
 user_pass = st.sidebar.text_input("Master Password", type="password")
 
 if not user_pass:
-    st.info("🗝️ Enter password to unlock.")
+    st.info("🗝️ Enter Master Password to unlock Shredlane tools.")
     st.stop()
 
 if user_pass != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
-    st.error("❌ Incorrect Password.")
+    st.error("❌ Access Denied.")
     st.stop()
 
 # --- 3. AUDIT ENGINE ---
@@ -64,33 +58,31 @@ if mode == "Audit Engine":
     whatsapp_data = st.text_area("Paste WhatsApp Stats:", height=100)
     diary_log = st.text_area("Paste MyNetDiary Log:", height=150)
     
-    if st.button("🚀 Run Shredlane Audit"):
-        if not client and not api_key:
-            st.error("AI Client not initialized.")
-        elif "chicken" in diary_log.lower() and not any(cut in diary_log.lower() for cut in ["breast", "thigh", "wing", "drumstick", "leg"]):
-            st.error("⚠️ SHREDLANE DOCTRINE: Specify chicken cut (Breast/Thigh) and weigh bone-free.")
+    if st.button("🚀 Run Audit & Sync"):
+        # REJECTION LOGIC for generic chicken
+        if "chicken" in diary_log.lower() and not any(cut in diary_log.lower() for cut in ["breast", "thigh", "wing", "drumstick", "leg"]):
+            st.error("⚠️ Shredlane Doctrine Violation: Generic 'chicken' detected. Specify the piece (e.g., Breast) and weigh without bones.")
         elif not client_name or not whatsapp_data:
-            st.error("Missing Client Name or WhatsApp data.")
+            st.error("Missing required data fields.")
         else:
             with st.spinner("Analyzing..."):
                 try:
-                    prompt = f"""
-                    SYSTEM: Shredlane Auditor. 
-                    RULES: Bullet points (•) only. NO DASHES. Fats in GRAMS. 
-                    Reject generic chicken. Protein: Soy=50g/100g, Breast=23g/100g.
-                    
-                    INPUT: {client_name} | {targets} | {whatsapp_data} | {diary_log}
+                    doctrine = """
+                    You are the Shredlane Auditor. 
+                    - NO DASHES: Use bullet points (•) only.
+                    - FATS: Must be in GRAMS.
+                    - PROTEIN: Breast=23g/100g, Soy=50g/100g, Beef/Goat=20g/100g.
+                    - TONE: Professional, firm, Grade 7 English.
                     """
-                    # New SDK call format
                     response = client.models.generate_content(
                         model=active_model,
-                        contents=prompt
+                        contents=f"{doctrine}\n\nAudit for {client_name}:\n{whatsapp_data}\n{diary_log}"
                     )
                     
-                    st.subheader(f"Results: {client_name}")
-                    clean_output = response.text.replace("- ", "• ").replace("—", "")
-                    st.markdown(clean_output)
-                    st.code(clean_output, language="markdown")
+                    st.subheader(f"Results for {client_name}")
+                    clean_text = response.text.replace("- ", "• ").replace("—", "")
+                    st.markdown(clean_text)
+                    st.code(clean_text, language="markdown")
                     
                 except Exception as e:
                     st.error(f"Audit Crash: {e}")
@@ -99,14 +91,14 @@ if mode == "Audit Engine":
 elif mode == "Meal Builder":
     st.header("🛠 Shredlane Meal Builder")
     u_weight = st.text_input("Weight (kg)")
-    u_ingredients = st.text_area("Ingredients")
+    u_ingredients = st.text_area("Ingredients (Specify cuts!)")
     
     if st.button("Build Plan"):
         with st.spinner("Generating..."):
             try:
                 res = client.models.generate_content(
-                    model=active_model, 
-                    contents=f"Shredlane Plan: {u_weight}kg, {u_ingredients}. Two options. No dashes. Fats in grams."
+                    model=active_model,
+                    contents=f"Shredlane Meal Plan: {u_weight}kg, {u_ingredients}. Two options. No dashes. Fats in grams."
                 )
                 st.markdown(res.text.replace("- ", "• "))
             except Exception as e:
