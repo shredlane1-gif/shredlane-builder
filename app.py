@@ -24,8 +24,8 @@ else:
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # Using the latest stable model string
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        # UPDATED: Using the standard full model path to fix the 404
+        model = genai.GenerativeModel("models/gemini-1.5-flash")
     except Exception as e:
         st.error(f"AI Configuration Error: {e}")
 
@@ -87,7 +87,7 @@ if mode == "Audit Engine":
             You are the Shredlane Data Auditor. Adhere to SHREDLANE DOCTRINE:
             1. PROTEIN: Soy Chunks (100g)=50g, Chicken Breast (100g)=23g, Beef (100g)=20g, Eggs (1)=6g.
             2. NO DASHES: Never use '-' or '—'. Use bullet points or numbers.
-            3. FATS: Must be in GRAMS. Warn if 'ml' or 'spoons' is used.
+            3. FATS: Must be in GRAMS.
             
             INPUT: {client_name} | {targets} | {whatsapp_data} | {diary_log}
             """
