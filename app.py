@@ -9,35 +9,38 @@ from datetime import datetime
 st.set_page_config(page_title="Shredlane Prime", layout="wide")
 st.title("⚡ Shredlane Prime: Automation Hub")
 
-# Load Secrets
 api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
 sheet_id = st.secrets.get("SPREADSHEET_ID")
 google_creds = st.secrets.get("gcp_service_account")
 
-# Sidebar Status & Setup
-st.sidebar.header("System Status")
+# --- SMART MODEL PICKER (Prevents 404) ---
+model = None
 if api_key:
-    st.sidebar.success("✅ API Key Loaded")
-    try:
-        genai.configure(api_key=api_key)
-        # Using the standard 2026 model string
-        model = genai.GenerativeModel("gemini-3-flash")
-    except Exception as e:
-        st.sidebar.error(f"AI Setup Error: {e}")
+    genai.configure(api_key=api_key)
+    # List of models to try in order of preference
+    for m_name in ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-pro"]:
+        try:
+            test_model = genai.GenerativeModel(m_name)
+            # Minimal test call to verify availability
+            test_model.generate_content("ping", generation_config={"max_output_tokens": 1})
+            model = test_model
+            st.sidebar.success(f"✅ System Online: {m_name}")
+            break
+        except:
+            continue
 else:
     st.sidebar.error("❌ API Key Missing")
 
 # --- 2. ACCESS CONTROL ---
-# This is the "Gatekeeper"
 mode = st.sidebar.radio("Navigation", ["Audit Engine", "Meal Builder"])
-user_pass = st.sidebar.text_input("Enter Master Password", type="password")
+user_pass = st.sidebar.text_input("Master Password", type="password")
 
 if not user_pass:
-    st.warning("🗝️ App Locked. Please enter the Master Password in the sidebar to reveal input fields.")
+    st.info("🗝️ Enter Master Password to unlock Shredlane Hub.")
     st.stop()
 
 if user_pass != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
-    st.error("❌ Access Denied: Incorrect Password.")
+    st.error("❌ Incorrect Password.")
     st.stop()
 
 # --- 3. GOOGLE SHEETS HELPER ---
@@ -54,7 +57,6 @@ def get_sheet():
 # --- 4. AUDIT ENGINE ---
 if mode == "Audit Engine":
     st.header("📋 Client Audit Engine")
-    st.write("Fill in the details below to generate a Shredlane Doctrine audit.")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -63,29 +65,39 @@ if mode == "Audit Engine":
     with col2:
         date_today = st.date_input("Check-in Date", datetime.now())
     
-    whatsapp_data = st.text_area("Paste WhatsApp Stats (Weight, Waist, etc.):", height=100)
-    diary_log = st.text_area("Paste MyNetDiary Food Log:", height=150)
+    whatsapp_data = st.text_area("Paste WhatsApp Stats:", height=100)
+    diary_log = st.text_area("Paste MyNetDiary Log:", height=150)
     
-    if st.button("Generate & Sync"):
-        if not client_name or not whatsapp_data:
-            st.error("Missing required fields!")
+    if st.button("Generate Audit & Sync"):
+        # REJECTION LOGIC: Check for generic "chicken"
+        if "chicken" in diary_log.lower() and not any(cut in diary_log.lower() for cut in ["breast", "thigh", "wing", "drumstick", "leg"]):
+            st.error("⚠️ Error: Generic 'chicken' detected. Please specify the cut (e.g., Breast, Thigh) and weigh without bones.")
+        elif not client_name or not whatsapp_data:
+            st.error("Client Name and WhatsApp data are required.")
         else:
-            with st.spinner("Analyzing..."):
+            with st.spinner("Processing Audit..."):
                 try:
-                    # Logic for the Audit
-                    prompt = f"Audit this based on Shredlane Doctrine (No dashes, fats in grams): {whatsapp_data} {diary_log}"
+                    doctrine = """
+                    SHREDLANE DOCTRINE:
+                    - NO DASHES: Use bullet points (•) only.
+                    - FATS: Must be in GRAMS. Reject 'ml' or 'spoons'.
+                    - PROTEIN: Soy Chunks (100g)=50g, Chicken Breast (100g)=23g, Beef (100g)=20g, Eggs (1)=6g.
+                    - REJECT generic 'chicken'. Require specific pieces.
+                    - Tone: Professional, firm, Grade 7 English.
+                    """
+                    prompt = f"{doctrine}\n\nAudit for {client_name}:\n{whatsapp_data}\n{diary_log}"
+                    
                     response = model.generate_content(prompt)
-                    st.subheader(f"Audit Results for {client_name}")
+                    st.subheader(f"Audit for {client_name}")
                     st.markdown(response.text.replace("- ", "• "))
                     
-                    # Try to sync to sheets
+                    # Sheets Sync
                     sheet = get_sheet()
                     if sheet:
-                        # Simple regex to find the weight
                         w_match = re.search(r"Weight:\s*(\d+\.?\d*)", whatsapp_data, re.IGNORECASE)
                         weight = w_match.group(1) if w_match else "N/A"
                         sheet.append_row([str(date_today), client_name, weight])
-                        st.toast("✅ Sheet Updated!")
+                        st.toast("✅ Sheet Updated")
                 except Exception as e:
                     st.error(f"Audit Error: {e}")
 
@@ -93,12 +105,15 @@ if mode == "Audit Engine":
 elif mode == "Meal Builder":
     st.header("🛠 Shredlane Meal Builder")
     u_weight = st.text_input("Client Weight (kg)")
-    u_ingredients = st.text_area("Available Ingredients")
+    u_ingredients = st.text_area("Available Ingredients (Specify meat cuts!)")
     
-    if st.button("Build Shredlane Plan"):
-        with st.spinner("Calculating..."):
-            try:
-                res = model.generate_content(f"Shredlane Meal Plan: {u_weight}kg using {u_ingredients}")
-                st.markdown(res.text.replace("- ", "• "))
-            except Exception as e:
-                st.error(f"Meal Builder Error: {e}")
+    if st.button("Build Plan"):
+        if not u_weight or not u_ingredients:
+            st.error("Weight and Ingredients required.")
+        else:
+            with st.spinner("Generating..."):
+                try:
+                    res = model.generate_content(f"Shredlane Meal Plan (2 options, no dashes, fats in grams): {u_weight}kg, {u_ingredients}")
+                    st.markdown(res.text.replace("- ", "• "))
+                except Exception as e:
+                    st.error(f"Meal Builder Error: {e}")
