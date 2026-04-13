@@ -14,18 +14,22 @@ api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
 sheet_id = st.secrets.get("SPREADSHEET_ID")
 google_creds = st.secrets.get("gcp_service_account") 
 
-# --- DIAGNOSTIC CHECK ---
+# Diagnostic Check
 if api_key:
-    st.sidebar.success("✅ API Key detected in Secrets")
+    st.sidebar.success("✅ API Key detected")
 else:
     st.sidebar.error("❌ API Key NOT detected")
 
-# Initialize Gemini Model
+# Initialize Gemini Model with Fallback
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # UPDATED: Using the standard full model path to fix the 404
-        model = genai.GenerativeModel("models/gemini-1.5-flash")
+        # Try the most common ID first
+        try:
+            model = genai.GenerativeModel("gemini-1.5-flash")
+        except:
+            model = genai.GenerativeModel("gemini-pro")
+        st.sidebar.info(f"Active Model: {model.model_name}")
     except Exception as e:
         st.error(f"AI Configuration Error: {e}")
 
@@ -79,22 +83,14 @@ if mode == "Audit Engine":
 
     if submit_audit:
         if not client_name or not whatsapp_data:
-            st.warning("⚠️ Missing data. Please paste the WhatsApp check-in.")
+            st.warning("⚠️ Missing data.")
         else:
             metrics = extract_metrics(whatsapp_data)
+            prompt = f"Shredlane Doctrine Audit (No dashes, fats in grams): {client_name} | {targets} | {whatsapp_data} | {diary_log}"
             
-            doctrine_prompt = f"""
-            You are the Shredlane Data Auditor. Adhere to SHREDLANE DOCTRINE:
-            1. PROTEIN: Soy Chunks (100g)=50g, Chicken Breast (100g)=23g, Beef (100g)=20g, Eggs (1)=6g.
-            2. NO DASHES: Never use '-' or '—'. Use bullet points or numbers.
-            3. FATS: Must be in GRAMS.
-            
-            INPUT: {client_name} | {targets} | {whatsapp_data} | {diary_log}
-            """
-            
-            with st.spinner("Analyzing and Syncing..."):
+            with st.spinner("Analyzing..."):
                 try:
-                    response = model.generate_content(doctrine_prompt)
+                    response = model.generate_content(prompt)
                     if response and response.text:
                         st.success("Audit Complete")
                         clean_feedback = response.text.replace("- ", "• ").replace("—", "")
@@ -107,7 +103,7 @@ if mode == "Audit Engine":
                             sheet.append_row(new_row)
                             st.toast("✅ Logged to Sheets!")
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Generation Error: {e}")
 
 # --- 5. MEAL BUILDER ---
 elif mode == "Meal Builder":
