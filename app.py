@@ -17,7 +17,6 @@ google_creds = st.secrets.get("gcp_service_account")
 # Initialize Gemini Model
 if api_key:
     genai.configure(api_key=api_key)
-    # Using the latest stable model
     model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Initialize Google Sheets Connection
@@ -40,30 +39,28 @@ def extract_metrics(text):
         "steps": re.search(r"Steps:\s*(\d+)", text, re.IGNORECASE),
         "sleep": re.search(r"Sleep:\s*(\d+)", text, re.IGNORECASE),
     }
-    # Clean up results: if not found, mark as 'Not reported'
     return {k: (v.group(1) if v else "Not reported") for k, v in metrics.items()}
 
 # --- 3. NAVIGATION & ACCESS CONTROL ---
 mode = st.sidebar.radio("Navigation", ["Audit Engine", "Meal Builder"])
 
+# PASSWORD CHECK
+password = st.sidebar.text_input("Master Password", type="password")
+
+if not password:
+    st.info("🗝️ Enter the Master Password in the sidebar to unlock the system.")
+    st.stop()
+
+correct_password = st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026")
+if password != correct_password:
+    st.error("❌ Incorrect Password. Access Denied.")
+    st.stop()
+
+# --- 4. MODE: AUDIT ENGINE ---
 if mode == "Audit Engine":
     st.subheader("📋 Shredlane Data Auditor")
     
-    # IMPROVED PASSWORD LOGIC
-    password = st.sidebar.text_input("Master Password", type="password")
-    
-    # 1. Check if the box is empty
-    if not password:
-        st.info("🗝️ Enter the Master Password in the sidebar to unlock the Audit Engine.")
-        st.stop()
-    
-    # 2. Check if the password is correct
-    correct_password = st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026")
-    if password != correct_password:
-        st.error("❌ Incorrect Password. Access Denied.")
-        st.stop()
-
-    # --- AUDIT ENGINE FORM ---
+    # Everything inside this 'with' block belongs to the form
     with st.form("audit_form"):
         col1, col2 = st.columns(2)
         with col1:
@@ -75,13 +72,13 @@ if mode == "Audit Engine":
         whatsapp_data = st.text_area("Paste WhatsApp Check-in Here:")
         diary_log = st.text_area("Paste MyNetDiary Log Here:")
         
+        # This button MUST be indented inside the 'with st.form' block
         submit_audit = st.form_submit_button("Generate Audit & Sync Data")
 
+    # This logic runs AFTER the form is submitted
     if submit_audit:
-        # Step 1: Extract metrics for the Google Sheet
         metrics = extract_metrics(whatsapp_data)
         
-        # Step 2: The Shredlane Doctrine Prompt
         doctrine_prompt = f"""
         You are the Shredlane Data Auditor. Adhere strictly to the Shredlane Doctrine.
         
@@ -94,69 +91,51 @@ if mode == "Audit Engine":
         1. Fats MUST be in GRAMS. Warn if 'ml' or 'spoons' is used.
         2. NEVER use dashes (-) or (—) in the output. Use bullet points or numbers.
         3. Tone: Professional, firm, but kind. Grade 7 level language.
-        4. Calculation: Sum all protein. If an item is missing from the table, estimate using standard data. Never report 0g for meat/eggs/soy.
         
         INPUT DATA:
-        Client: {client_name}
-        Targets: {targets}
-        Daily Stats: {whatsapp_data}
-        Food Logs: {diary_log}
+        Client: {client_name} | Targets: {targets}
+        Stats: {whatsapp_data} | Logs: {diary_log}
         """
 
-        with st.spinner("Processing data..."):
-            # Generate AI Feedback
+        with st.spinner("Processing..."):
             response = model.generate_content(doctrine_prompt)
-            # Extra safety layer to remove dashes if the AI slips up
             final_feedback = response.text.replace("- ", "• ").replace("—", "")
             
-            # Display Result
             st.success("Audit Complete")
             st.markdown(final_feedback)
             st.code(final_feedback, language="markdown")
 
-            # Step 3: Sync to Google Sheets
+            # Sync to Sheets
             sheet = get_sheet()
             if sheet:
                 try:
-                    new_row = [
-                        str(date_today), 
-                        client_name, 
-                        metrics["weight"], 
-                        metrics["waist"], 
-                        metrics["steps"], 
-                        metrics["sleep"]
-                    ]
+                    new_row = [str(date_today), client_name, metrics["weight"], metrics["waist"], metrics["steps"], metrics["sleep"]]
                     sheet.append_row(new_row)
                     st.toast(f"✅ Logged to Sheets for {client_name}!")
                 except Exception as e:
-                    st.error(f"Failed to sync to Sheets: {e}")
+                    st.error(f"Sheet Sync Error: {e}")
 
+# --- 5. MODE: MEAL BUILDER ---
 elif mode == "Meal Builder":
     st.subheader("🛠 Shredlane Meal Builder")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        gender = st.selectbox("Gender", ["Female", "Male"])
-        weight = st.text_input("Current Weight (kg)")
-    with col2:
-        ingredients = st.text_area("Available Ingredients (e.g. Eggs, Rice, Beef)")
+    with st.form("meal_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            gender = st.selectbox("Gender", ["Female", "Male"])
+            weight = st.text_input("Current Weight (kg)")
+        with col2:
+            ingredients = st.text_area("Available Ingredients")
 
-    if st.button("Build Shredlane Plan"):
+        submit_meal = st.form_submit_button("Build Shredlane Plan")
+
+    if submit_meal:
         if not weight or not ingredients:
             st.warning("Please enter weight and ingredients.")
         else:
-            meal_logic = """
-            Shredlane Meal Builder Rules:
-            - Fats: 20-30% of total calories.
-            - Units: Eggs in whole units. Meats/Grains in grams (raw weight).
-            - Ugali: Never use 'Maize Flour'. Use 'Cooked Ugali' in grams.
-            - Measurement: Fats must be in GRAMS.
-            - Output: NO DASHES. Provide exactly two options:
-              Option 1: Two Meals (split ingredients).
-              Option 2: One Big Meal (combined).
-            """
-            full_meal_prompt = f"System: {meal_logic}\n\nInput: {gender}, {weight}kg, {ingredients}"
+            meal_logic = "Shredlane Meal Builder: Fats 20-30%. No flour (use Cooked Ugali). Fats in GRAMS. No dashes. Option 1 (2 meals), Option 2 (1 big meal)."
+            full_prompt = f"{meal_logic}\n\nInput: {gender}, {weight}kg, {ingredients}"
             
-            with st.spinner("Calculating macros..."):
-                res = model.generate_content(full_meal_prompt)
+            with st.spinner("Building..."):
+                res = model.generate_content(full_prompt)
                 st.markdown(res.text.replace("- ", "• "))
