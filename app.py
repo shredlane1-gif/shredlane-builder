@@ -7,55 +7,67 @@ from datetime import datetime
 
 # --- 1. CONFIGURATION & SETUP ---
 st.set_page_config(page_title="Shredlane Prime Master", layout="wide")
-st.title("⚡ Shredlane Prime: Automation Hub")
 
 # Load Secrets
 api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
 sheet_id = st.secrets.get("SPREADSHEET_ID")
 google_creds = st.secrets.get("gcp_service_account") 
 
-# --- DIAGNOSTIC CHECK ---
+# Sidebar Status
+st.sidebar.title("Navigation")
 if api_key:
     st.sidebar.success("✅ API Key detected")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-3-flash")
 else:
     st.sidebar.error("❌ API Key NOT detected")
 
-# Initialize Gemini Model (Updated for 2026 Models)
-if api_key:
-    try:
-        genai.configure(api_key=api_key)
-        # Using Gemini 3 Flash - the current standard for 2026
-        model = genai.GenerativeModel("gemini-3-flash")
-        st.sidebar.info("Model: Gemini 3 Flash")
-    except Exception as e:
-        # Fallback to 2.5 if 3.0 is having high demand
-        try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            st.sidebar.warning("Model: Gemini 2.5 Fallback")
-        except:
-            st.error(f"AI Configuration Error: {e}")
+# --- 2. ACCESS CONTROL ---
+# We define these FIRST so they are always available to the code
+mode = st.sidebar.radio("Go to:", ["Audit Engine", "Meal Builder"])
+password = st.sidebar.text_input("Master Password", type="password")
 
-# Initialize Google Sheets Connection
-def get_sheet():
-    try:
-        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        creds = Credentials.from_service_account_info(google_creds, scopes=scopes)
-        client = gspread.authorize(creds)
-        return client.open_by_key(sheet_id).sheet1
-    except Exception as e:
-        st.error(f"Google Sheets Connection Error: {e}")
-        return None
+# This "Stop" ensures nothing below shows unless the password is correct
+if not password:
+    st.warning("🗝️ Please enter the Master Password in the sidebar to begin.")
+    st.stop()
 
-# --- 2. DATA PARSER ---
-def extract_metrics(text):
-    metrics = {
-        "weight": re.search(r"Weight:\s*(\d+\.?\d*)", text, re.IGNORECASE),
-        "waist": re.search(r"Waist:\s*(\d+\.?\d*)", text, re.IGNORECASE),
-        "steps": re.search(r"Steps:\s*(\d+)", text, re.IGNORECASE),
-        "sleep": re.search(r"Sleep:\s*(\d+)", text, re.IGNORECASE),
-    }
-    return {k: (v.group(1) if v else "Not reported") for k, v in metrics.items()}
+if password != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
+    st.error("❌ Incorrect Password.")
+    st.stop()
 
-# --- 3. ACCESS CONTROL ---
-mode = st.sidebar.radio("Navigation", ["Audit Engine", "Meal Builder"])
-password = st
+# --- 3. AUDIT ENGINE ---
+if mode == "Audit Engine":
+    st.header("📋 Shredlane Data Auditor")
+    
+    # We use a standard layout instead of a form first to see if it renders
+    client_name = st.text_input("Client Name")
+    targets = st.text_input("Daily Targets (e.g. 1500 kcal / 120g Pro)")
+    date_today = st.date_input("Check-in Date", datetime.now())
+    
+    whatsapp_data = st.text_area("Paste WhatsApp Check-in Text:", height=150)
+    diary_log = st.text_area("Paste MyNetDiary Log:", height=150)
+    
+    if st.button("🚀 Run Shredlane Audit"):
+        if not client_name or not whatsapp_data:
+            st.error("Please fill in the Client Name and WhatsApp data.")
+        else:
+            with st.spinner("Gemini 3 Flash is auditing..."):
+                try:
+                    prompt = f"Audit for {client_name}. Doctrine: No dashes, fats in grams. Input: {whatsapp_data} {diary_log}"
+                    response = model.generate_content(prompt)
+                    st.success("Audit Results:")
+                    st.markdown(response.text.replace("- ", "• "))
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+# --- 4. MEAL BUILDER ---
+elif mode == "Meal Builder":
+    st.header("🛠 Shredlane Meal Builder")
+    u_weight = st.text_input("Current Weight (kg)")
+    u_ingredients = st.text_area("Available Ingredients")
+    
+    if st.button("Generate Plan"):
+        with st.spinner("Building..."):
+            res = model.generate_content(f"Shredlane Plan for {u_weight}kg: {u_ingredients}")
+            st.markdown(res.text.replace("- ", "• "))
