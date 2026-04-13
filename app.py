@@ -6,37 +6,43 @@ import re
 from datetime import datetime
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Shredlane Prime", layout="wide")
+st.set_page_config(page_title="Shredlane Prime Master", layout="wide")
 st.title("⚡ Shredlane Prime: Automation Hub")
 
+# Load Secrets
 api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
 sheet_id = st.secrets.get("SPREADSHEET_ID")
 google_creds = st.secrets.get("gcp_service_account")
 
-# --- SMART MODEL PICKER (Prevents 404) ---
+# --- SMART MODEL PICKER (Fixes 404 & NoneType errors) ---
 model = None
 if api_key:
     genai.configure(api_key=api_key)
-    # List of models to try in order of preference
-    for m_name in ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-pro"]:
+    # 2026 Model Priority List
+    model_variants = ["gemini-3-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-pro"]
+    
+    for m_name in model_variants:
         try:
             test_model = genai.GenerativeModel(m_name)
-            # Minimal test call to verify availability
-            test_model.generate_content("ping", generation_config={"max_output_tokens": 1})
+            # Connectivity Test
+            test_model.generate_content("hi", generation_config={"max_output_tokens": 1})
             model = test_model
-            st.sidebar.success(f"✅ System Online: {m_name}")
+            st.sidebar.success(f"✅ AI Online: {m_name}")
             break
-        except:
+        except Exception:
             continue
+
+    if model is None:
+        st.sidebar.error("❌ AI Offline: Check API Key/Quotas")
 else:
-    st.sidebar.error("❌ API Key Missing")
+    st.sidebar.error("❌ Secrets Error: GOOGLE_API_KEY not found")
 
 # --- 2. ACCESS CONTROL ---
 mode = st.sidebar.radio("Navigation", ["Audit Engine", "Meal Builder"])
 user_pass = st.sidebar.text_input("Master Password", type="password")
 
 if not user_pass:
-    st.info("🗝️ Enter Master Password to unlock Shredlane Hub.")
+    st.info("🗝️ Enter Master Password in the sidebar to unlock system.")
     st.stop()
 
 if user_pass != st.secrets.get("MASTER_PASSWORD", "SHREDLANE2026"):
@@ -51,7 +57,7 @@ def get_sheet():
         client = gspread.authorize(creds)
         return client.open_by_key(sheet_id).sheet1
     except Exception as e:
-        st.error(f"Sheets Connection Error: {e}")
+        st.error(f"Sheets Error: {e}")
         return None
 
 # --- 4. AUDIT ENGINE ---
@@ -61,59 +67,63 @@ if mode == "Audit Engine":
     col1, col2 = st.columns(2)
     with col1:
         client_name = st.text_input("Client Name")
-        targets = st.text_input("Daily Targets")
+        targets = st.text_input("Daily Targets (e.g., 1800kcal / 140g P)")
     with col2:
         date_today = st.date_input("Check-in Date", datetime.now())
     
     whatsapp_data = st.text_area("Paste WhatsApp Stats:", height=100)
     diary_log = st.text_area("Paste MyNetDiary Log:", height=150)
     
-    if st.button("Generate Audit & Sync"):
-        # REJECTION LOGIC: Check for generic "chicken"
-        if "chicken" in diary_log.lower() and not any(cut in diary_log.lower() for cut in ["breast", "thigh", "wing", "drumstick", "leg"]):
-            st.error("⚠️ Error: Generic 'chicken' detected. Please specify the cut (e.g., Breast, Thigh) and weigh without bones.")
+    if st.button("🚀 Run Shredlane Audit"):
+        if model is None:
+            st.error("AI Engine is not connected. Check sidebar status.")
+        elif "chicken" in diary_log.lower() and not any(cut in diary_log.lower() for cut in ["breast", "thigh", "wing", "drumstick", "leg"]):
+            st.error("⚠️ Shredlane Violation: Specify the chicken cut (Breast/Thigh) and weigh without bones.")
         elif not client_name or not whatsapp_data:
-            st.error("Client Name and WhatsApp data are required.")
+            st.error("Please provide Client Name and WhatsApp data.")
         else:
-            with st.spinner("Processing Audit..."):
+            with st.spinner("Analyzing data..."):
                 try:
                     doctrine = """
-                    SHREDLANE DOCTRINE:
-                    - NO DASHES: Use bullet points (•) only.
-                    - FATS: Must be in GRAMS. Reject 'ml' or 'spoons'.
-                    - PROTEIN: Soy Chunks (100g)=50g, Chicken Breast (100g)=23g, Beef (100g)=20g, Eggs (1)=6g.
-                    - REJECT generic 'chicken'. Require specific pieces.
-                    - Tone: Professional, firm, Grade 7 English.
+                    SYSTEM INSTRUCTION: You are the Shredlane Data Auditor.
+                    - Format: Bullet points (•) only. NO DASHES.
+                    - Metrics: Fats in GRAMS only. 
+                    - Precision: Reject non-specific chicken. Require cut identification.
+                    - Protein: Breast=23g/100g, Soy=50g/100g, Beef/Goat=20g/100g.
                     """
-                    prompt = f"{doctrine}\n\nAudit for {client_name}:\n{whatsapp_data}\n{diary_log}"
+                    prompt = f"{doctrine}\n\nAUDIT: {client_name} | {targets} | {whatsapp_data} | {diary_log}"
                     
                     response = model.generate_content(prompt)
-                    st.subheader(f"Audit for {client_name}")
-                    st.markdown(response.text.replace("- ", "• "))
+                    st.subheader(f"Results: {client_name}")
+                    clean_text = response.text.replace("- ", "• ").replace("—", "")
+                    st.markdown(clean_text)
+                    st.code(clean_text, language="markdown")
                     
-                    # Sheets Sync
+                    # Sync to Sheets
                     sheet = get_sheet()
                     if sheet:
                         w_match = re.search(r"Weight:\s*(\d+\.?\d*)", whatsapp_data, re.IGNORECASE)
                         weight = w_match.group(1) if w_match else "N/A"
                         sheet.append_row([str(date_today), client_name, weight])
-                        st.toast("✅ Sheet Updated")
+                        st.toast(f"✅ Logged {client_name}'s weight to Sheets")
                 except Exception as e:
-                    st.error(f"Audit Error: {e}")
+                    st.error(f"Audit Crash: {e}")
 
 # --- 5. MEAL BUILDER ---
 elif mode == "Meal Builder":
     st.header("🛠 Shredlane Meal Builder")
     u_weight = st.text_input("Client Weight (kg)")
-    u_ingredients = st.text_area("Available Ingredients (Specify meat cuts!)")
+    u_ingredients = st.text_area("Available Ingredients")
     
     if st.button("Build Plan"):
-        if not u_weight or not u_ingredients:
-            st.error("Weight and Ingredients required.")
+        if model is None:
+            st.error("AI Engine offline.")
+        elif not u_weight or not u_ingredients:
+            st.error("Provide weight and ingredients.")
         else:
-            with st.spinner("Generating..."):
+            with st.spinner("Building Options..."):
                 try:
-                    res = model.generate_content(f"Shredlane Meal Plan (2 options, no dashes, fats in grams): {u_weight}kg, {u_ingredients}")
+                    res = model.generate_content(f"Shredlane Plan: {u_weight}kg, ingredients: {u_ingredients}. Two options. No dashes. Fats in grams.")
                     st.markdown(res.text.replace("- ", "• "))
                 except Exception as e:
-                    st.error(f"Meal Builder Error: {e}")
+                    st.error(f"Builder Error: {e}")
