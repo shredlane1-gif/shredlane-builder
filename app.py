@@ -145,4 +145,8 @@ elif mode == "Meal Builder":
                 try:
                     res = client.models.generate_content(
                         model=active_model, 
-                        contents=f"Shredlane Plan: {u_weight}kg, {u_ingredients}.
+                        contents=f"Shredlane Plan: {u_weight}kg, {u_ingredients}. Two options. No dashes. Fats in grams."
+                    )
+                    st.markdown(res.text.replace("- ", "• "))
+                except Exception as e:
+                    st.error(f"Builder Error: {e}")
