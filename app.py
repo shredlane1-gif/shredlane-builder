@@ -15,12 +15,13 @@ google_creds = st.secrets.get("gcp_service_account")
 
 # Initialize Client
 client = None
-active_model = "gemini-3-flash" 
+# CHANGED: Using 'gemini-1.5-flash' as it is the most stable 2026 endpoint for v1beta
+active_model = "gemini-1.5-flash" 
 
 if api_key:
     try:
         client = genai.Client(api_key=api_key)
-        st.sidebar.success("✅ AI Online: Gemini 3 Flash")
+        st.sidebar.success(f"✅ AI Online: {active_model}")
     except Exception as e:
         st.sidebar.error(f"Connection Failed: {e}")
 
@@ -83,7 +84,11 @@ if mode == "Audit Engine":
                     
                     AUDIT THIS: {client_name} | {targets} | {whatsapp_data} | {diary_log}
                     """
-                    response = client.models.generate_content(model=active_model, contents=doctrine_prompt)
+                    # New API models sometimes require 'models/' prefix depending on region
+                    response = client.models.generate_content(
+                        model=active_model, 
+                        contents=doctrine_prompt
+                    )
                     
                     st.subheader(f"Results for {client_name}")
                     clean_output = response.text.replace("- ", "• ").replace("—", "")
