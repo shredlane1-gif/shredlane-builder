@@ -13,15 +13,39 @@ api_key = st.secrets.get("GOOGLE_API_KEY", "").strip()
 sheet_id = st.secrets.get("SPREADSHEET_ID")
 google_creds = st.secrets.get("gcp_service_account")
 
-# Initialize Client
+# Initialize Client & Auto-Detect Model
 client = None
-# CHANGED: Using 'gemini-1.5-flash' as it is the most stable 2026 endpoint for v1beta
-active_model = "gemini-1.5-flash" 
+active_model = None
 
 if api_key:
     try:
         client = genai.Client(api_key=api_key)
-        st.sidebar.success(f"✅ AI Online: {active_model}")
+        
+        # --- AUTO-DISCOVERY LOOP ---
+        # This looks at your actual account permissions to find a working name
+        available_models = [m.name for m in client.models.list()]
+        
+        # Priority list for Shredlane (Newest to Oldest)
+        priority_names = [
+            "models/gemini-2.0-flash", 
+            "models/gemini-1.5-flash", 
+            "models/gemini-pro"
+        ]
+        
+        for name in priority_names:
+            if name in available_models:
+                active_model = name
+                break
+        
+        # Fallback if none of the above are found
+        if not active_model and available_models:
+            active_model = available_models[0]
+            
+        if active_model:
+            st.sidebar.success(f"✅ AI Online: {active_model}")
+        else:
+            st.sidebar.error("❌ No models found on this key.")
+            
     except Exception as e:
         st.sidebar.error(f"Connection Failed: {e}")
 
@@ -65,8 +89,9 @@ if mode == "Audit Engine":
     diary_log = st.text_area("Paste MyNetDiary Log:", height=150)
     
     if st.button("🚀 Run Audit & Sync"):
-        # REJECTION LOGIC
-        if "chicken" in diary_log.lower() and not any(cut in diary_log.lower() for cut in ["breast", "thigh", "wing", "drumstick", "leg"]):
+        if not active_model:
+            st.error("AI Model not found. Check sidebar.")
+        elif "chicken" in diary_log.lower() and not any(cut in diary_log.lower() for cut in ["breast", "thigh", "wing", "drumstick", "leg"]):
             st.error("⚠️ SHREDLANE DOCTRINE: Specify chicken piece (e.g. Breast) and weigh bone-free.")
         elif not client_name or not whatsapp_data:
             st.error("Missing Client Name or Stats.")
@@ -78,13 +103,10 @@ if mode == "Audit Engine":
                     TONE: Professional, firm, Grade 7 English. No jargon.
                     RULES: 
                     - Bullet points (•) only. NO DASHES.
-                    - Fats: Must be in GRAMS. 
                     - Protein: Soy Chunks (100g)=50g, Chicken Breast (100g)=23g, Beef (100g)=20g, Eggs (1)=6g, Fish (100g)=20g.
-                    - Feedback must be punchy. If data is missing, tell them to provide it in grams next time.
                     
                     AUDIT THIS: {client_name} | {targets} | {whatsapp_data} | {diary_log}
                     """
-                    # New API models sometimes require 'models/' prefix depending on region
                     response = client.models.generate_content(
                         model=active_model, 
                         contents=doctrine_prompt
@@ -116,12 +138,11 @@ elif mode == "Meal Builder":
     u_ingredients = st.text_area("Ingredients")
     
     if st.button("Build Plan"):
-        with st.spinner("Generating..."):
-            try:
-                res = client.models.generate_content(
-                    model=active_model, 
-                    contents=f"Shredlane Plan: {u_weight}kg, {u_ingredients}. Two options. No dashes. Fats in grams."
-                )
-                st.markdown(res.text.replace("- ", "• "))
-            except Exception as e:
-                st.error(f"Builder Error: {e}")
+        if not active_model:
+            st.error("AI Model offline.")
+        else:
+            with st.spinner("Generating..."):
+                try:
+                    res = client.models.generate_content(
+                        model=active_model, 
+                        contents=f"Shredlane Plan: {u_weight}kg, {u_ingredients}.
