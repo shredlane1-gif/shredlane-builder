@@ -18,24 +18,21 @@ if api_key:
     except Exception as e:
         st.sidebar.error(f"⚠️ Connection Failed: {e}")
 
-# Sidebar Navigation - Both engines are here
 mode = st.sidebar.radio("Navigation", ["Meal Builder", "Audit Engine"])
 
-# --- 2. THE STRENGTHENED DOCTRINE ---
+# --- 2. THE REFINED SHREDLANE DOCTRINE ---
 SHREDLANE_DOCTRINE = """
 SHREDLANE DOCTRINE RULES:
 1. TARGETS: Use the client's specific Calorie and Protein targets.
 2. MEAL STRUCTURE: Always provide Option 1 (Two Small Meals) and Option 2 (One Big Meal).
-3. EGG RULE: Eggs are tracked by NUMBER (e.g., 2 Eggs). All other proteins are in GRAMS (g).
+3. EGG RULE: Track eggs by NUMBER (e.g., 3 Eggs). All other items (Meat, Soy, Carbs) in GRAMS (g).
 4. WEIGHING: 
    • Weigh RAW: Meat, Fish, Rice, Potatoes, Soy Chunks, Omena, Veggies.
    • Weigh COOKED: Ugali, Beans, Lentils.
 5. THE OIL TAX: If any meal is 'Restaurant Style', add a +15g Vegetable Oil log line.
 6. THE CHAI SPLIT: Log Milk (ml) and Sugar (g) separately. No 'Cup of Tea' entries.
 7. SATIETY WARNING: If target is <= 1300kcal and no greens are listed, add: "⚠️ WARNING: High calorie density. Add 150g greens to prevent hunger."
-8. AUDIT PENALTY: If a high-calorie food (Nuts, Avocado, Ghee) is logged without grams, use the highest-calorie entry available.
-9. CHICKEN RULE: Reject 'Chicken'. Must specify cut (Breast/Thigh) and bone-free.
-10. FORMATTING: Use Bullet Points (•) ONLY. Never use dashes (-).
+8. FORMATTING: Use Bullet Points (•) ONLY. Never use dashes (-). Use Bold headers for sections.
 """
 
 # --- 3. MEAL BUILDER ---
@@ -52,24 +49,34 @@ if mode == "Meal Builder":
         if not target_cal or not ingredients:
             st.error("Please enter targets and ingredients.")
         else:
-            with st.spinner("Enforcing Doctrine..."):
+            with st.spinner("Building meals..."):
                 try:
                     builder_prompt = f"""
                     {SHREDLANE_DOCTRINE}
-                    TASK: Create a meal plan using: {ingredients}.
-                    TARGET: {target_cal} kcal and {target_pro} protein.
+                    
+                    TASK: Create a meal plan for: {target_cal} kcal and {target_pro} protein using {ingredients}.
                     
                     MANDATORY STRUCTURE:
-                    - Option 1 (Two Small Meals): List exact grams/numbers for Meal 1 and Meal 2.
-                    - Option 2 (One Big Meal): List exact grams/numbers for the full day.
-                    - MyNetDiary LOG: Exact lines for the app.
+                    • **TARGET:** [Total kcal] | [Total Protein]
+                    • **⚠️ WARNING:** [Include Satiety Warning if target <= 1300kcal]
+                    
+                    **OPTION 1: TWO SMALL MEALS**
+                    • **Meal 1:** [List ingredients + exact weights/numbers]
+                    • **Meal 2:** [List ingredients + exact weights/numbers]
+                    
+                    **OPTION 2: ONE BIG MEAL**
+                    • **The Feast:** [List all ingredients for the full day + exact weights/numbers]
+                    
+                    **MyNetDiary LOG LINES:**
+                    • [Item 1]: [Grams/Numbers]
+                    • [Item 2]: [Grams/Numbers]
                     """
                     res = client.models.generate_content(model=active_model, contents=builder_prompt)
                     st.markdown(res.text.replace("- ", "• "))
                 except Exception as e:
                     st.error(f"Builder Error: {e}")
 
-# --- 4. AUDIT ENGINE (RESTORED) ---
+# --- 4. AUDIT ENGINE ---
 elif mode == "Audit Engine":
     st.header("📋 Client Check-in Audit")
     col1, col2 = st.columns(2)
@@ -83,7 +90,7 @@ elif mode == "Audit Engine":
         if not check_in_data:
             st.error("Paste data to audit.")
         else:
-            with st.spinner("Analyzing against Doctrine..."):
+            with st.spinner("Analyzing..."):
                 try:
                     audit_prompt = f"""
                     {SHREDLANE_DOCTRINE}
@@ -91,12 +98,12 @@ elif mode == "Audit Engine":
                     TARGETS: {client_target}
                     DATA: {check_in_data}
                     
-                    AUDIT PROTOCOL:
-                    1. Check if they weighed everything (no 'handfuls' or 'bowls').
-                    2. Check if they hit the protein floor for their target.
-                    3. Flag 'Chicken' if the cut isn't specified.
-                    4. Check for hidden oils or un-split Chai.
-                    5. TONE: Firm, Grade 7 English. Use Bullet Points (•).
+                    MANDATORY STRUCTURE:
+                    • **STATUS:** [🟢 PASSED / 🔴 OVER BUDGET / 🟡 UNDER PROTEIN]
+                    • **CALORIES:** [Total logged] / [Target]
+                    • **PROTEIN:** [Total logged] / [Target]
+                    • **DOCTRINE VIOLATIONS:** [List any violations like egg weight, hidden oils, or 'handfuls']
+                    • **COACH ADVICE:** [1-2 sentences of firm advice]
                     """
                     response = client.models.generate_content(model=active_model, contents=audit_prompt)
                     st.markdown(response.text.replace("- ", "• "))
